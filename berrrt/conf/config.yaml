@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+  - bert: berrrt
+  - utils
+
+debug: true
+
+hydra:
+  sweeper:
+    params:
+      bert: glob(*)
+  run:
+    dir: hydra_output/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+utils:
+  random_seed: 44
+  model_output_path: model_output
