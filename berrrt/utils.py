@@ -1,13 +1,20 @@
+import logging
 import os
-import random
+from enum import Enum
 
-import numpy as np
-import torch
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 import wandb
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+log = logging.getLogger(__name__)
+
+
+class StrEnum(str, Enum):
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"'{str(self)}'"
 
 
 def setup_wandb():
@@ -100,31 +107,22 @@ def upload_to_huggingface(
         os.remove("_temporary_config.json")
 
 
-def print_ascii_art():
-    return r"""                                
+def compute_metrics(eval_pred):
+    import numpy as np
 
-    (( /#               BERRRT and BERT Training
-   /  */#( %%    &  
-  /* ((  ,#   %& && 
-   ,(       %%  &,  
-         ###  %& &  
-                    """
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    accuracy = accuracy_score(labels, predictions)
+    precision, recall, f_score, _ = precision_recall_fscore_support(labels, predictions)
 
-
-def compute_metrics(p):
-    preds = np.argmax(p.predictions, axis=1)
-    return {"accuracy": accuracy_score(p.label_ids, preds)}
+    return {
+        "accuracy": accuracy,
+        "f1": f_score.tolist(),
+        "precision": precision.tolist(),
+        "recall": recall.tolist(),
+    }
 
 
 def create_run_name(model_type, task, num_epochs, learning_rate, optimizer_name):
     lr_str = f"{learning_rate:.0e}".replace("-", "m")
     return f"{model_type}-{task}-{num_epochs}epochs-LR{lr_str}-{optimizer_name}"
-
-
-def set_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(seed)
-    random.seed(seed)

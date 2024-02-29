@@ -1,9 +1,18 @@
 defaults:
   - _self_
-  - bert: berrrt
+  - modules: berrrt
   - utils
+  - dataset: default
+  - train: default
+
+run_name:
+  run_name: null
+  model_type: berrrt
 
 debug: true
+
+dataset:
+  sample: true
 
 hydra:
   sweeper:
@@ -15,3 +24,5 @@ hydra:
 utils:
   random_seed: 44
   model_output_path: model_output
+
+project_name: berrrt

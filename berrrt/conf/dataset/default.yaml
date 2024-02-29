@@ -1,0 +1,13 @@
+path: "glue"
+name: "mrpc"
+truncation: True
+pretrained_model_name_or_path: "bert-base-uncased"
+batched: True
+
+sample: true
+sample_size: 100
+
+tokenizer:
+  truncation: True
+  padding: "max_length"
+  max_length: 125
