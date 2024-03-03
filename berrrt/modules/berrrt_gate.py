@@ -40,7 +40,13 @@ class BERRRTFFN(nn.Module):
 
 class BERRRTGateModel(nn.Module):
     def __init__(
-        self, bert_model_name, layer_start, layer_end, freeze_base, activation="softm"
+        self,
+        bert_model_name,
+        layer_start,
+        layer_end,
+        freeze_base,
+        num_classes,
+        activation: str = "softm",
     ):
         super().__init__()
         config = BertConfig.from_pretrained(bert_model_name, output_hidden_states=True)
@@ -54,11 +60,10 @@ class BERRRTGateModel(nn.Module):
         self._layer_end = None
         self.layer_start = layer_start
         self.layer_end = layer_end
+        self.num_classes = num_classes
         self.gate = Gate(self.bert.config.hidden_size)
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
-        self.output_layer = nn.Linear(
-            self.bert.config.hidden_size, self.bert.config.hidden_size
-        )
+        self.output_layer = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     @property
     def layer_start(self):
@@ -106,9 +111,7 @@ class BERRRTGateModel(nn.Module):
         loss = None
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(
-                logits.view(-1, self.output_layer.out_features), labels.view(-1)
-            )
+            loss = loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
 
         return (
             {"loss": loss, "logits": logits} if loss is not None else {"logits": logits}

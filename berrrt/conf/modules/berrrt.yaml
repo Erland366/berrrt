@@ -1,4 +1,5 @@
 defaults:
   - default
+  - layer_configuration
 
 aggregation: add

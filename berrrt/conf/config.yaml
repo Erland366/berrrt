@@ -4,25 +4,24 @@ defaults:
   - utils
   - dataset: default
   - train: default
+  - logging: wandb
+
+modules_name: berrrt
 
 run_name:
   run_name: null
-  model_type: berrrt
+  model_type: ${modules_name}
 
-debug: true
-
-dataset:
-  sample: true
+mode: debug # either full, debug, or sanity_check
 
 hydra:
   sweeper:
     params:
-      bert: glob(*)
+      berrrt: glob(*)
   run:
     dir: hydra_output/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 utils:
   random_seed: 44
-  model_output_path: model_output
 
-project_name: berrrt
+model_output_path: model_output

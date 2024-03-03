@@ -1,6 +1,9 @@
 from os import PathLike
-from typing import Union
+from typing import Sequence, Union
 
-__all__ = ["PathOrStr"]
+from torch import Tensor
+
+__all__ = ["PathOrStr", "SequenceOrTensor"]
 
 PathOrStr = Union[str, PathLike[str]]
+SequenceOrTensor = Union[Sequence, Tensor]

@@ -1,5 +1,5 @@
-
 defaults:
   - default
+  - layer_configuration
 
 gate: softmax

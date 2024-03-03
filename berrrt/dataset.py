@@ -14,7 +14,7 @@ class BERRRTDataset(object):
         self.eval_encoded = None
         self.test_encoded = None
 
-        if cfg.dataset.sample:
+        if cfg.mode == "sample":
             self.train_dataset = (
                 self.dataset["train"]
                 .shuffle(seed=cfg.utils.random_seed)
@@ -39,16 +39,25 @@ class BERRRTDataset(object):
         self.train_encoded = self.train_dataset.map(
             self.tokenize_function, batched=self.cfg.dataset.batched
         )
+        self.train_encoded = self.train_encoded.remove_columns(
+            ["sentence1", "sentence2"]
+        )
 
         if self.eval_dataset is not None:
             self.eval_encoded = self.eval_dataset.map(
                 self.tokenize_function, batched=self.cfg.dataset.batched
+            )
+            self.eval_encoded = self.eval_encoded.remove_columns(
+                ["sentence1", "sentence2"]
             )
             self.set_format(self.eval_encoded)
 
         if self.test_dataset is not None:
             self.test_encoded = self.test_dataset.map(
                 self.tokenize_function, batched=self.cfg.dataset.batched
+            )
+            self.test_encoded = self.test_encoded.remove_columns(
+                ["sentence1", "sentence2"]
             )
             self.set_format(self.test_encoded)
 

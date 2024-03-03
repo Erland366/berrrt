@@ -28,3 +28,14 @@ test-full: ## Run all tests
 
 train: ## Train the model
 	python src/train.py
+
+clean_hydra: ## Clean hydra logs
+	rm -rf ./hydra_output
+
+clean_model:
+	rm -rf ./model_output
+	
+
+clean_wandb:
+	rm -rf ./wandb
+	rm -rf ./notebooks/wandb
