@@ -31,9 +31,20 @@ def print_headers(cfg):
     gpu_stats = torch.cuda.get_device_properties(0)
     max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
     print("=========================================")
-    print(
-        f"  ____   _____  ____   ____   ____  _____ \tSTART TRAINING! Experiment Type: {cfg.modules_name}"
-    )
+    if cfg.mode == "debug":
+        print(
+            f"  ____   _____  ____   ____   ____  _____ \tDEBUG MODE, NOT GOING TO TRAIN! Experiment Type: {cfg.modules_name}"
+        )
+    elif cfg.mode == "sanity_check":
+        print(
+            f"  ____   _____  ____   ____   ____  _____ \tSANITY CHECK MODE, MAKE SURE RESULT IS OVERFIT! Experiment Type: {cfg.modules_name}"
+        )
+    elif cfg.mode == "full":
+        print(
+            f"  ____   _____  ____   ____   ____  _____ \tSTART TRAINING! Experiment Type: {cfg.modules_name}"
+        )
+    else:
+        raise ValueError(f"Unknown mode: {cfg.mode}")
     print(
         f" | __ ) | ____||  _ \ |  _ \ |  _ \|_   _|\tGPU: {gpu_stats.name}. Max memory: {max_memory} GB. Platform: {platform.system()}"
     )
@@ -52,13 +63,30 @@ def print_headers(cfg):
 def compute_metrics(pred: EvalPrediction) -> dict:
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        labels, preds, average="binary"
-    )
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds)
     acc = accuracy_score(labels, preds)
-    return {"accuracy": acc, "f1": f1, "precision": precision, "recall": recall}
+    return {
+        "accuracy": acc,
+        "f1": f1.tolist(),
+        "precision": precision.tolist(),
+        "recall": recall.tolist(),
+    }
 
 
-def create_run_name(model_type, task, num_epochs, learning_rate, optimizer_name) -> str:
+def create_run_name(
+    model_type,
+    additional_prefix: str,
+    task,
+    num_epochs,
+    learning_rate,
+    optimizer_name,
+    sanity_check: bool = False,
+    add_id: bool = True,
+) -> str:
     lr_str = f"{learning_rate:.0e}".replace("-", "m")
-    return f"{model_type}-{task}-{num_epochs}epochs-LR{lr_str}-{optimizer_name}"
+    run_name = f"{model_type}-{additional_prefix}-{task}-{num_epochs}epochs-LR{lr_str}-{optimizer_name}"
+    if sanity_check:
+        run_name += "-sanity"
+    if add_id:
+        run_name += f"-{wandb.util.generate_id()}"
+    return run_name

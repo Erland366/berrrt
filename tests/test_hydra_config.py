@@ -14,10 +14,6 @@ def test_hydra_config():
         print()
         print(om.to_yaml(cfg))
 
-        dict_result = om.to_container(cfg, resolve=True)
-
-        print(f"{dict_result['modules'] = }")
-
-        print(f"{cfg.run_name.model_type =}")
+        print(cfg.modules.additional_prefix)
 
         assert cfg.utils.random_seed == 43

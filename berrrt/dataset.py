@@ -14,15 +14,29 @@ class BERRRTDataset(object):
         self.eval_encoded = None
         self.test_encoded = None
 
-        if cfg.mode == "sample":
+        if cfg.mode == "sanity_check":
+            from collections import Counter
+
+            import numpy as np
+
             self.train_dataset = (
                 self.dataset["train"]
                 .shuffle(seed=cfg.utils.random_seed)
                 .select(range(cfg.dataset.sample_size))
             )
+            self.eval_dataset = self.train_dataset
+            # Get the label values as a NumPy array
+            label_values = np.array(self.train_dataset["label"])
+
+            # Count the occurrences of each label value
+            label_counts = Counter(label_values)
+
+            # Print the counts for each class
+            for label, count in label_counts.items():
+                print(f"Class {label}: {count} samples")
         else:
             self.train_dataset = self.dataset["train"]
-        self.eval_dataset = self.dataset.get("validation", None)
+            self.eval_dataset = self.dataset.get("validation", None)
         self.test_dataset = self.dataset.get("test", None)
         self.prepare_datasets()
 

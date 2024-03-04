@@ -1,23 +1,23 @@
 defaults:
   - _self_
-  - modules: berrrt
+  - modules: &modules berrrt
   - utils
   - dataset: default
   - train: default
   - logging: wandb
 
-modules_name: berrrt
+modules_name: *modules
 
 run_name:
   run_name: null
   model_type: ${modules_name}
 
-mode: debug # either full, debug, or sanity_check
+mode: "debug" # either full, debug, or sanity_check
 
 hydra:
   sweeper:
     params:
-      berrrt: glob(*)
+      bert: glob(*)
   run:
     dir: hydra_output/${now:%Y-%m-%d}/${now:%H-%M-%S}
 

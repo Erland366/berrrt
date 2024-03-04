@@ -1,5 +1,8 @@
 defaults:
   - default
   - layer_configuration
+  - _self_
 
 aggregation: add
+
+additional_prefix: aggregation_${modules.aggregation}-layer_range_${modules.layer_start}_${modules.layer_end}

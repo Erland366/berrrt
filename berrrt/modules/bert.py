@@ -1,5 +1,6 @@
 import torch.nn as nn
 from transformers import BertForSequenceClassification
+from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 class BERTModel(nn.Module):
@@ -8,6 +9,7 @@ class BERTModel(nn.Module):
         pretrained_model_name_or_path,
         freeze_base: bool,
         num_classes: int,
+        **kwargs,
     ):
         super().__init__()
         self.model = BertForSequenceClassification.from_pretrained(
@@ -24,3 +26,9 @@ class BERTModel(nn.Module):
             input_ids=input_ids, attention_mask=attention_mask, labels=labels
         )
         return outputs
+        # return SequenceClassifierOutput(
+        #     loss=outputs.loss,
+        #     logits=outputs.logits,
+        #     hidden_states=None,
+        #     attentions=None,
+        # )

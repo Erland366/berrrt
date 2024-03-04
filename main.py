@@ -17,26 +17,28 @@ from berrrt.utils import compute_metrics, create_run_name, print_headers, setup_
 
 @hydra.main(version_base=None, config_path="berrrt/conf", config_name="config")
 def run(cfg: DictConfig):
-    if cfg.mode == "debug":
-        print("Debug mode, here's your configuration")
-        print()
-        print(om.to_yaml(cfg))
-        return
-    set_seed(cfg.utils.random_seed)
-
     run_name = create_run_name(
         cfg.run_name.model_type,
+        cfg.modules.additional_prefix,
         cfg.dataset.name,
         cfg.train.num_train_epochs,
         cfg.train.learning_rate,
         cfg.train.optim,
+        cfg.mode.lower() == "sanity_check",
     )
+    del cfg.modules.additional_prefix
+
+    if cfg.mode == "debug":
+        print_headers(cfg)
+        print("Debug mode, here's your configuration")
+        print()
+        print(om.to_yaml(cfg))
+        print(f"{run_name = }")
+        return
+    set_seed(cfg.utils.random_seed)
 
     if not os.path.exists(run_name):
         os.makedirs(run_name)
-
-    if cfg.mode == "sample":
-        run_name += "_sample"
 
     if cfg.logging.name is None:
         cfg.logging.name = run_name
@@ -44,8 +46,8 @@ def run(cfg: DictConfig):
     setup_wandb(cfg)
     run_name = os.path.join(cfg.model_output_path, run_name)
     cfg.run_name.run_name = run_name
-
     print_headers(cfg)
+
     main(cfg)
 
 

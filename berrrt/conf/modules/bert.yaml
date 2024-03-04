@@ -1,2 +1,5 @@
 defaults:
   - default
+  - _self_
+
+additional_prefix: VANILLA
