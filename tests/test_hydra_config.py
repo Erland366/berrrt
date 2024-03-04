@@ -9,11 +9,14 @@ def test_hydra_config():
     ):
         cfg = compose(
             config_name="config",
-            overrides=["modules=berrrt"],
+            overrides=["modules=bert", "modules_name=bert"],
         )
         print()
         print(om.to_yaml(cfg))
 
         print(cfg.modules.additional_prefix)
+        print(cfg.logging.tags)
+        print(cfg.logging.tags[0])
+        print(list(cfg.logging.tags))
 
         assert cfg.utils.random_seed == 43

@@ -4,7 +4,7 @@ truncation: True
 pretrained_model_name_or_path: "bert-base-uncased"
 batched: True
 
-sample_size: 100
+sample_size: ${modules.num_classes}
 
 tokenizer:
   truncation: True

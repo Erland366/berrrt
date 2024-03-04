@@ -1,30 +1,16 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
+import torch.nn.functional as F
 from transformers import BertConfig, BertModel
 
 
 class Gate(nn.Module):
-    def __init__(self, input_dim, activation):
+    def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.activation = activation
-        if activation == "sigmoid":
-            output_dim = 1
-        elif activation == "softmax":
-            output_dim = 2
-        else:
-            raise ValueError(f"Unsupported activation: {activation}")
-
         self.gate_weight = nn.Linear(input_dim, output_dim)
 
     def forward(self, x):
-        x = self.gate_weight(x)
-        if self.activation == "sigmoid":
-            return torch.sigmoid(x)
-        elif self.activation == "softmax":
-            return F.softmax(x, dim=-1)
-        else:
-            raise ValueError(f"Unsupported activation: {self.activation}")
+        return self.gate_weight(x)
 
 
 class BERRRTFFN(nn.Module):
@@ -41,72 +27,73 @@ class BERRRTFFN(nn.Module):
 class BERRRTGateModel(nn.Module):
     def __init__(
         self,
-        bert_model_name,
+        pretrained_model_name_or_path,
         layer_start,
         layer_end,
         freeze_base,
         num_classes,
-        activation: str = "softm",
+        dropout: float = 0.1,
+        gate: str = "softmax",
     ):
         super().__init__()
-        config = BertConfig.from_pretrained(bert_model_name, output_hidden_states=True)
-        self.bert = BertModel.from_pretrained(bert_model_name, config=config)
+        self.config = BertConfig.from_pretrained(
+            pretrained_model_name_or_path, output_hidden_states=True
+        )
+        self.bert = BertModel.from_pretrained(
+            pretrained_model_name_or_path, config=self.config
+        )
 
         if freeze_base:
             for param in self.bert.parameters():
                 param.requires_grad = False
 
-        self._layer_start = None
-        self._layer_end = None
         self.layer_start = layer_start
         self.layer_end = layer_end
         self.num_classes = num_classes
-        self.gate = Gate(self.bert.config.hidden_size)
+        self.gate_type = gate
+        self.num_layers = layer_end - layer_start + 1
+        output_dim = self.num_layers if gate == "softmax" else 1
+        self.gate = Gate(self.bert.config.hidden_size, output_dim)
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.output_layer = nn.Linear(self.bert.config.hidden_size, num_classes)
-
-    @property
-    def layer_start(self):
-        return self._layer_start
-
-    @layer_start.setter
-    def layer_start(self, value):
-        if value < 0:
-            raise ValueError("layer_start must be non-negative")
-        if self._layer_end is not None and value > self._layer_end:
-            raise ValueError("layer_start must be less than or equal to layer_end")
-        self._layer_start = value
-
-    @property
-    def layer_end(self):
-        return self._layer_end
-
-    @layer_end.setter
-    def layer_end(self, value):
-        if value < 0:
-            raise ValueError("layer_end must be non-negative")
-        if self._layer_start is not None and value < self._layer_start:
-            raise ValueError("layer_end must be greater than or equal to layer_start")
-        if value >= self.config.num_hidden_layers:
-            raise ValueError(
-                f"layer_end must be less than the number of layers in the model ({self.config.num_hidden_layers} layers)"
-            )
-        self._layer_end = value
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-
         all_hidden_states = outputs.hidden_states[self.layer_start : self.layer_end + 1]
-        cumulative_output = torch.zeros_like(outputs.last_hidden_state)
+        batch_size, seq_length, hidden_dim = outputs.last_hidden_state.shape
 
-        for hidden_state in all_hidden_states:
-            gate_values = self.gate(hidden_state)
-            berrrt_output = self.berrrt_ffn(hidden_state)
-            cumulative_output += gate_values * berrrt_output
+        cumulative_output = torch.zeros(
+            batch_size, seq_length, hidden_dim, device=outputs.last_hidden_state.device
+        )
 
-        final_output = self.output_layer(cumulative_output)
+        if self.gate_type == "softmax":
+            gate_values = [
+                self.gate(hidden_state) for hidden_state in all_hidden_states
+            ]
+            gate_values = torch.stack(gate_values, dim=2)
 
-        logits = final_output[:, 0, :]
+            softmax_gate_values = F.softmax(gate_values, dim=2)
+
+            for i, hidden_state in enumerate(all_hidden_states):
+                berrrt_output = self.berrrt_ffn(hidden_state)
+
+                layer_gate_values = softmax_gate_values[:, :, i, :].unsqueeze(-1)
+
+                weighted_output = layer_gate_values * berrrt_output.unsqueeze(2)
+                cumulative_output += weighted_output.sum(dim=2)
+
+        elif self.gate_type == "sigmoid":
+            for hidden_state in all_hidden_states:
+                gate_values = self.gate(hidden_state)
+                sigmoid_gate_values = torch.sigmoid(gate_values)
+                berrrt_output = self.berrrt_ffn(hidden_state)
+
+                weighted_output = sigmoid_gate_values * berrrt_output
+                cumulative_output += weighted_output
+
+        cumulative_output = self.dropout(cumulative_output)
+        logits = self.output_layer(cumulative_output.mean(dim=1))
 
         loss = None
         if labels is not None:

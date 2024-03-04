@@ -1,3 +1,7 @@
 project: berrrt
 name: null
 entity: erlandpg
+tags:
+  - ${modules_name}
+  - ${mode}
+  - ${dataset.name}

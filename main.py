@@ -1,6 +1,7 @@
 import os
 
 import hydra
+import wandb
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
 from transformers import (
@@ -8,7 +9,6 @@ from transformers import (
     TrainingArguments,
 )
 
-import wandb
 from berrrt.dataset import BERRRTDataset
 from berrrt.modules.base import ModulesFactory
 from berrrt.torch_utils import get_default_device, set_seed
@@ -35,10 +35,9 @@ def run(cfg: DictConfig):
         print(om.to_yaml(cfg))
         print(f"{run_name = }")
         return
+    elif cfg.mode == "sanity_check":
+        cfg.train.num_train_epochs = 1
     set_seed(cfg.utils.random_seed)
-
-    if not os.path.exists(run_name):
-        os.makedirs(run_name)
 
     if cfg.logging.name is None:
         cfg.logging.name = run_name
@@ -46,6 +45,9 @@ def run(cfg: DictConfig):
     setup_wandb(cfg)
     run_name = os.path.join(cfg.model_output_path, run_name)
     cfg.run_name.run_name = run_name
+
+    if not os.path.exists(run_name):
+        os.makedirs(run_name)
     print_headers(cfg)
 
     main(cfg)

@@ -1,12 +1,12 @@
 defaults:
   - _self_
-  - modules: &modules berrrt
+  - modules: berrrt
   - utils
   - dataset: default
   - train: default
   - logging: wandb
 
-modules_name: *modules
+modules_name: berrrt
 
 run_name:
   run_name: null

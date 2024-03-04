@@ -13,7 +13,10 @@ log = logging.getLogger(__name__)
 
 def setup_wandb(cfg):
     run = wandb.init(
-        project=cfg.logging.project, name=cfg.logging.name, entity=cfg.logging.entity
+        project=cfg.logging.project,
+        name=cfg.logging.name,
+        entity=cfg.logging.entity,
+        tags=list(cfg.logging.tags),
     )
     return run
 
@@ -63,13 +66,22 @@ def print_headers(cfg):
 def compute_metrics(pred: EvalPrediction) -> dict:
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
-    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        labels, preds, average="binary"
+    )
+    # acc = accuracy_score(labels, preds)
+    # return {
+    #     "accuracy": acc,
+    #     "f1": f1.tolist(),
+    #     "precision": precision.tolist(),
+    #     "recall": recall.tolist(),
+    # }
     acc = accuracy_score(labels, preds)
     return {
         "accuracy": acc,
-        "f1": f1.tolist(),
-        "precision": precision.tolist(),
-        "recall": recall.tolist(),
+        "f1": f1,
+        "precision": precision,
+        "recall": recall,
     }
 
 
