@@ -27,14 +27,6 @@ for ((layer=0; layer<=10; layer++)); do
   bash scripts/print_header.sh
   
   # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=pool
-done
-
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
   python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=concat
 done
 

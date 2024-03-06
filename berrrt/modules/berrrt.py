@@ -46,8 +46,6 @@ class BERRRTModel(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.config.hidden_size, num_classes)
 
-        if aggregation == "pool":
-            self.pooling_layer = nn.AdaptiveAvgPool1d(1)
         if aggregation == "concat":
             self.reduce_linear = nn.Linear(
                 self.config.hidden_size * (layer_end - layer_start + 1),
@@ -67,19 +65,6 @@ class BERRRTModel(nn.Module):
             cumulative_output = torch.sum(torch.stack(all_hidden_states), dim=0)
         elif self.aggregation == "average":
             cumulative_output = torch.mean(torch.stack(all_hidden_states), dim=0)
-        elif self.aggregation == "pool":
-            stacked_outputs = torch.stack(
-                all_hidden_states
-            )  # [num_layers, batch_size, seq_len, hidden_size]
-            stacked_outputs = stacked_outputs.permute(
-                1, 3, 0, 2
-            )  # [batch_size, hidden_size, num_layers, seq_len]
-            pooled_output = self.pooling_layer(stacked_outputs).squeeze(
-                -1
-            )  # [batch_size, hidden_size, seq_len]
-            cumulative_output = pooled_output.mean(
-                dim=2
-            )  # Final pooling across seq_len
         elif self.aggregation == "concat":
             concatenated_output = torch.cat(all_hidden_states, dim=-1)
             cumulative_output = self.reduce_linear(concatenated_output)
@@ -96,9 +81,11 @@ class BERRRTModel(nn.Module):
             attention_scores = F.softmax(
                 self.attention_weights(stacked_outputs).squeeze(-1), dim=0
             )
-            cumulative_output = torch.sum(
-                attention_scores.unsqueeze(-1).unsqueeze(-1) * stacked_outputs, dim=0
+            expanded_attention = attention_scores.unsqueeze(-1).expand(
+                -1, -1, -1, self.config.hidden_size
             )
+            # match [num_layers, batch_size, seq_len, hidden_size]
+            cumulative_output = torch.sum(expanded_attention * stacked_outputs, dim=0)
         else:
             raise ValueError(f"Unsupported aggregation strategy: {self.aggregation}")
 
