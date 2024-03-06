@@ -9,4 +9,4 @@ sample_size: ${modules.num_classes}
 tokenizer:
   truncation: True
   padding: "max_length"
-  max_length: 125
+  max_length: 256
