@@ -1,5 +1,5 @@
 pretrained_model_name_or_path: bert-base-uncased
-freeze_base: true
+freeze_base: false
 num_classes: 2
 dropout: 0.1
 

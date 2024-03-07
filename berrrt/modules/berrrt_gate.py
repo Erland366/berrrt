@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertConfig, BertModel
 
+from berrrt.aliases import SequenceOrTensor
+
 
 class Gate(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -11,6 +13,27 @@ class Gate(nn.Module):
 
     def forward(self, x):
         return self.gate_weight(x)
+
+
+class AttentionGate(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.query = nn.Linear(hidden_dim, hidden_dim)
+        self.key = nn.Linear(hidden_dim, hidden_dim)
+        self.value = nn.Linear(hidden_dim, hidden_dim)
+
+    def forward(self, hidden_states: SequenceOrTensor) -> SequenceOrTensor:
+        # Multiple hidden_states turned into one
+
+        Q = self.query(hidden_states)
+        K = self.key(hidden_states)
+        V = self.value(hidden_states)
+
+        with torch.backends.cuda.sdp_kernel():
+            attention_value = F.scaled_dot_product_attention(Q, K, V)
+
+        return attention_value
 
 
 class BERRRTFFN(nn.Module):
@@ -52,11 +75,15 @@ class BERRRTGateModel(nn.Module):
         self.num_classes = num_classes
         self.gate_type = gate
         self.num_layers = layer_end - layer_start + 1
-        output_dim = self.num_layers if gate == "softmax" else 1
-        self.gate = Gate(self.bert.config.hidden_size, output_dim)
+        self.gate = Gate(
+            self.bert.config.hidden_size,
+            self.num_layers
+            if gate in ["softmax", "sigmoid"]
+            else self.bert.config.hidden_size,
+        )
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
-        self.output_layer = nn.Linear(self.bert.config.hidden_size, num_classes)
         self.dropout = nn.Dropout(dropout)
+        self.output_layer = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -67,30 +94,22 @@ class BERRRTGateModel(nn.Module):
             batch_size, seq_length, hidden_dim, device=outputs.last_hidden_state.device
         )
 
-        if self.gate_type == "softmax":
-            gate_values = [
-                self.gate(hidden_state) for hidden_state in all_hidden_states
-            ]
-            gate_values = torch.stack(gate_values, dim=2)
-
-            softmax_gate_values = F.softmax(gate_values, dim=2)
-
+        if self.gate_type in ["softmax", "sigmoid"]:
+            gate_values = torch.stack(
+                [self.gate(hidden_state) for hidden_state in all_hidden_states], dim=0
+            )  # Shape: [num_layers, batch_size, seq_length, hidden_dim]
+            if self.gate_type == "softmax":
+                gate_values = F.softmax(
+                    gate_values, dim=0
+                )  # Apply softmax across the first dimension (layers)
+            else:  # Sigmoid
+                gate_values = torch.sigmoid(gate_values)
+        elif self.gate_type == "attention":
+            attention_output = self.gate(torch.stack(all_hidden_states, dim=0))
             for i, hidden_state in enumerate(all_hidden_states):
-                berrrt_output = self.berrrt_ffn(hidden_state)
-
-                layer_gate_values = softmax_gate_values[:, :, i, :].unsqueeze(-1)
-
-                weighted_output = layer_gate_values * berrrt_output.unsqueeze(2)
-                cumulative_output += weighted_output.sum(dim=2)
-
-        elif self.gate_type == "sigmoid":
-            for hidden_state in all_hidden_states:
-                gate_values = self.gate(hidden_state)
-                sigmoid_gate_values = torch.sigmoid(gate_values)
-                berrrt_output = self.berrrt_ffn(hidden_state)
-
-                weighted_output = sigmoid_gate_values * berrrt_output
-                cumulative_output += weighted_output
+                attention_weighted_state = attention_output[i]
+                berrrt_output = self.berrrt_ffn(attention_weighted_state)
+                cumulative_output += berrrt_output
 
         cumulative_output = self.dropout(cumulative_output)
         logits = self.output_layer(cumulative_output.mean(dim=1))
