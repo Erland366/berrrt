@@ -1,14 +1,11 @@
 import os
 
 import hydra
-import wandb
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
-from transformers import (
-    Trainer,
-    TrainingArguments,
-)
+from transformers import EarlyStoppingCallback, Trainer, TrainingArguments
 
+import wandb
 from berrrt.dataset import BERRRTDataset
 from berrrt.modules.base import ModulesFactory
 from berrrt.torch_utils import get_default_device, set_seed
@@ -42,7 +39,8 @@ def run(cfg: DictConfig):
     if cfg.logging.name is None:
         cfg.logging.name = run_name
 
-    setup_wandb(cfg)
+    if cfg.train.report_to == "wandb":
+        setup_wandb(cfg)
     run_name = os.path.join(cfg.model_output_path, run_name)
     cfg.run_name.run_name = run_name
 
@@ -73,6 +71,7 @@ def main(cfg: DictConfig):
         train_dataset=dataset.train_encoded,
         eval_dataset=dataset.eval_encoded,
         compute_metrics=compute_metrics,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     )
 
     trainer.train()

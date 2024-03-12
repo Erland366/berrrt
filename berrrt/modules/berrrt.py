@@ -89,7 +89,7 @@ class BERRRTModel(nn.Module):
         else:
             raise ValueError(f"Unsupported aggregation strategy: {self.aggregation}")
 
-        pooled_output = cumulative_output[1]
+        pooled_output = cumulative_output[0]
         pooled_output = self.dropout(cumulative_output)
         logits = self.classifier(pooled_output)[:, 0, :]
 

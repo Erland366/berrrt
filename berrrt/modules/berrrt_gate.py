@@ -83,7 +83,7 @@ class BERRRTGateModel(nn.Module):
         )
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.dropout = nn.Dropout(dropout)
-        self.output_layer = nn.Linear(self.bert.config.hidden_size, num_classes)
+        self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -94,16 +94,24 @@ class BERRRTGateModel(nn.Module):
             batch_size, seq_length, hidden_dim, device=outputs.last_hidden_state.device
         )
 
+        stacked_hidden_states = torch.stack(all_hidden_states, dim=-1)
         if self.gate_type in ["softmax", "sigmoid"]:
-            gate_values = torch.stack(
-                [self.gate(hidden_state) for hidden_state in all_hidden_states], dim=0
-            )  # Shape: [num_layers, batch_size, seq_length, hidden_dim]
             if self.gate_type == "softmax":
                 gate_values = F.softmax(
-                    gate_values, dim=0
+                    stacked_hidden_states, dim=0
                 )  # Apply softmax across the first dimension (layers)
             else:  # Sigmoid
-                gate_values = torch.sigmoid(gate_values)
+                gate_values = torch.sigmoid(stacked_hidden_states)
+            for i, hidden_state in enumerate(all_hidden_states):
+                berrrt_output = self.berrrt_ffn(hidden_state)
+                layer_gate_values = gate_values[..., -1]
+                print(f"{gate_values.shape = }")
+                print(f"{layer_gate_values.shape = }")
+                print(f"{berrrt_output.shape = }")
+                weighted_output = (
+                    layer_gate_values * berrrt_output
+                )  # Element-wise multiplication
+                cumulative_output += weighted_output
         elif self.gate_type == "attention":
             attention_output = self.gate(torch.stack(all_hidden_states, dim=0))
             for i, hidden_state in enumerate(all_hidden_states):
@@ -111,8 +119,9 @@ class BERRRTGateModel(nn.Module):
                 berrrt_output = self.berrrt_ffn(attention_weighted_state)
                 cumulative_output += berrrt_output
 
-        cumulative_output = self.dropout(cumulative_output)
-        logits = self.output_layer(cumulative_output.mean(dim=1))
+        pooled_output = cumulative_output[0]
+        pooled_output = self.dropout(cumulative_output)
+        logits = self.classifier(pooled_output)[:, 0, :]
 
         loss = None
         if labels is not None:
