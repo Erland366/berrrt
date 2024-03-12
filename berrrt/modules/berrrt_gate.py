@@ -105,9 +105,6 @@ class BERRRTGateModel(nn.Module):
             for i, hidden_state in enumerate(all_hidden_states):
                 berrrt_output = self.berrrt_ffn(hidden_state)
                 layer_gate_values = gate_values[..., -1]
-                print(f"{gate_values.shape = }")
-                print(f"{layer_gate_values.shape = }")
-                print(f"{berrrt_output.shape = }")
                 weighted_output = (
                     layer_gate_values * berrrt_output
                 )  # Element-wise multiplication
