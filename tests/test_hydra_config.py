@@ -9,7 +9,7 @@ def test_hydra_config():
     ):
         cfg = compose(
             config_name="config",
-            overrides=["modules=bert", "modules_name=bert"],
+            overrides=["modules=bert", "modules_name=bert", "dataset=emotion"],
         )
         print()
         print(om.to_yaml(cfg))
@@ -18,5 +18,7 @@ def test_hydra_config():
         print(cfg.logging.tags)
         print(cfg.logging.tags[0])
         print(list(cfg.logging.tags))
+        print(cfg.dataset.sample_size)
+        print(cfg.modules.num_classes)
 
         assert cfg.utils.random_seed == 43

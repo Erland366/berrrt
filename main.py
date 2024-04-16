@@ -11,8 +11,6 @@ from berrrt.modules.base import ModulesFactory
 from berrrt.torch_utils import get_default_device, set_seed
 from berrrt.utils import compute_metrics, create_run_name, print_headers, setup_wandb
 
-import os
-os.environ["WANDB_DISABLED"] = "true"
 
 @hydra.main(version_base=None, config_path="berrrt/conf", config_name="config")
 def run(cfg: DictConfig):

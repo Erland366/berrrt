@@ -89,7 +89,7 @@ class BERRRTGateModel(nn.Module):
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
         all_hidden_states = outputs.hidden_states[self.layer_start : self.layer_end + 1]
-        batch_size, seq_length, hidden_dim = outputs.last_hidden_state.shape
+        batch_size, _, hidden_dim = outputs.last_hidden_state.shape
 
         cumulative_output = torch.zeros(
             batch_size, hidden_dim, device=outputs.last_hidden_state.device
@@ -107,14 +107,14 @@ class BERRRTGateModel(nn.Module):
                     linear_hidden_states, dim=1
                 )  # Apply softmax across the first dimension (layers)
             else:  # Sigmoid
-                gate_values = F.sigmoid(linear_hidden_states, dim=1)
+                gate_values = F.sigmoid(linear_hidden_states).squeeze(-1)
 
             gate_values = gate_values.squeeze(-1)
             for i in range(cls_hidden_states.shape[1]):
                 berrrt_output = self.berrrt_ffn(
                     cls_hidden_states[:, i, ...]
                 )  # [b, n_layers, 768]
-                layer_gate_values = gate_values[..., i]
+                layer_gate_values = gate_values[..., i].unsqueeze(-1)
                 weighted_output = (
                     layer_gate_values * berrrt_output
                 )  # Element-wise multiplication
@@ -130,8 +130,6 @@ class BERRRTGateModel(nn.Module):
         pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
         logits = self.classifier(pooled_output)  # [b, num_classes]
-
-        breakpoint()
 
         loss = None
         if labels is not None:

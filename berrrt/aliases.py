@@ -1,9 +1,10 @@
 from os import PathLike
-from typing import Sequence, Union
+from typing import Sequence
 
-from torch import Tensor
+import torch
 
 __all__ = ["PathOrStr", "SequenceOrTensor"]
 
-PathOrStr = Union[str, PathLike[str]]
-SequenceOrTensor = Union[Sequence, Tensor]
+PathOrStr = str | PathLike
+SequenceOrTensor = Sequence | torch.Tensor
+Device = torch.device | str | None
