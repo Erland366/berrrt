@@ -1,0 +1,12 @@
+path: "tweet_eval"
+name: "hate"
+truncation: True
+pretrained_model_name_or_path: "bert-base-uncased"
+batched: True
+
+sample_size: ${modules.num_classes}
+
+tokenizer:
+  truncation: True
+  padding: "max_length"
+  max_length: 256

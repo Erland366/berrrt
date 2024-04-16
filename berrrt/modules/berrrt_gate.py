@@ -84,6 +84,7 @@ class BERRRTGateModel(nn.Module):
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
+        self.linear_hidden = nn.Linear(self.bert.config.hidden_size, 1)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -91,34 +92,46 @@ class BERRRTGateModel(nn.Module):
         batch_size, seq_length, hidden_dim = outputs.last_hidden_state.shape
 
         cumulative_output = torch.zeros(
-            batch_size, seq_length, hidden_dim, device=outputs.last_hidden_state.device
+            batch_size, hidden_dim, device=outputs.last_hidden_state.device
         )
 
         stacked_hidden_states = torch.stack(all_hidden_states, dim=-1)
+        cls_hidden_states = stacked_hidden_states[:, 0, :, :]  # [b, 768, n_layers]
+        cls_hidden_states = cls_hidden_states.permute(0, 2, 1)  # [b, n_layers, 768]
+
+        # Generate gating for me
         if self.gate_type in ["softmax", "sigmoid"]:
+            linear_hidden_states = self.linear_hidden(cls_hidden_states)
             if self.gate_type == "softmax":
                 gate_values = F.softmax(
-                    stacked_hidden_states, dim=0
+                    linear_hidden_states, dim=1
                 )  # Apply softmax across the first dimension (layers)
             else:  # Sigmoid
-                gate_values = torch.sigmoid(stacked_hidden_states)
-            for i, hidden_state in enumerate(all_hidden_states):
-                berrrt_output = self.berrrt_ffn(hidden_state)
-                layer_gate_values = gate_values[..., -1]
+                gate_values = F.sigmoid(linear_hidden_states, dim=1)
+
+            gate_values = gate_values.squeeze(-1)
+            for i in range(cls_hidden_states.shape[1]):
+                berrrt_output = self.berrrt_ffn(
+                    cls_hidden_states[:, i, ...]
+                )  # [b, n_layers, 768]
+                layer_gate_values = gate_values[..., i]
                 weighted_output = (
                     layer_gate_values * berrrt_output
                 )  # Element-wise multiplication
                 cumulative_output += weighted_output
         elif self.gate_type == "attention":
+            linear_hidden_states = self.linear_hidden(cls_hidden_states)
             attention_output = self.gate(torch.stack(all_hidden_states, dim=0))
             for i, hidden_state in enumerate(all_hidden_states):
                 attention_weighted_state = attention_output[i]
                 berrrt_output = self.berrrt_ffn(attention_weighted_state)
                 cumulative_output += berrrt_output
 
-        pooled_output = cumulative_output[0]
+        pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
-        logits = self.classifier(pooled_output)[:, 0, :]
+        logits = self.classifier(pooled_output)  # [b, num_classes]
+
+        breakpoint()
 
         loss = None
         if labels is not None:
