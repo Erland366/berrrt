@@ -120,11 +120,11 @@ class BERRRTGateModel(nn.Module):
                 )  # Element-wise multiplication
                 cumulative_output += weighted_output
         elif self.gate_type == "attention":
-            linear_hidden_states = self.linear_hidden(cls_hidden_states)
-            attention_output = self.gate(torch.stack(all_hidden_states, dim=0))
-            for i, hidden_state in enumerate(all_hidden_states):
-                attention_weighted_state = attention_output[i]
-                berrrt_output = self.berrrt_ffn(attention_weighted_state)
+            attention_output = self.gate(cls_hidden_states)
+            for i in range(cls_hidden_states.shape[1]):
+                berrrt_output = self.berrrt_ffn(
+                    attention_output[:, i, ...]
+                )  # FFN applied to each attention-weighted layer output
                 cumulative_output += berrrt_output
 
         pooled_output = cumulative_output
