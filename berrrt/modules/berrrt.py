@@ -4,6 +4,8 @@ from torch.nn import functional as F
 from transformers import BertConfig, BertModel
 from transformers.modeling_outputs import SequenceClassifierOutput
 
+from berrrt.aliases import SequenceOrTensor  # type: ignore
+
 
 class BERRRTFFN(nn.Module):
     def __init__(self, config):
@@ -14,6 +16,31 @@ class BERRRTFFN(nn.Module):
 
     def forward(self, x):
         return self.linear2(self.act(self.linear1(x)))
+
+
+class Attention(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+
+        # For simplicity, we just use one attention head
+        # Reference too adding attention heads:
+        # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/modeling_llama.py#L289
+        self.q_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.k_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.v_proj = nn.Linear(hidden_dim, hidden_dim)
+
+    def forward(
+        self, query: SequenceOrTensor, key: SequenceOrTensor, value: SequenceOrTensor
+    ) -> SequenceOrTensor:
+        Q = self.q_proj(query)
+        K = self.k_proj(key)
+        V = self.v_proj(value)
+
+        with torch.backends.cuda.sdp_kernel():
+            attention_value = F.scaled_dot_product_attention(Q, K, V)
+
+        return attention_value
 
 
 class BERRRTModel(nn.Module):
@@ -54,20 +81,39 @@ class BERRRTModel(nn.Module):
         elif aggregation == "weighted_sum":
             self.layer_weights = nn.Parameter(torch.ones(layer_end - layer_start + 1))
         elif aggregation == "attention":
-            self.attention_weights = nn.Linear(self.config.hidden_size, 1)
+            self.reduce_linear = nn.Linear(
+                self.config.hidden_size * (layer_end - layer_start + 1),
+                self.config.hidden_size,
+            )
+            self.attention_layer = Attention(self.config.hidden_size)
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
 
-        all_hidden_states = outputs.hidden_states[self.layer_start : self.layer_end + 1]
+        all_hidden_states = outputs.hidden_states[
+            self.layer_start : self.layer_end + 1
+        ]  # tuple(12)
+        # each of themn is [batch_size, seq_len, hidden_size]
 
         if self.aggregation == "add":
-            cumulative_output = torch.sum(torch.stack(all_hidden_states), dim=0)
+            stacked_output = torch.stack(
+                all_hidden_states
+            )  # [num_layers, batch_size, seq_len, hidden_size]
+            cumulative_output = torch.sum(stacked_output, dim=0)
         elif self.aggregation == "average":
-            cumulative_output = torch.mean(torch.stack(all_hidden_states), dim=0)
+            stacked_output = torch.stack(
+                all_hidden_states
+            )  # [num_layers, batch_size, seq_len, hidden_size]
+            cumulative_output = torch.mean(
+                stacked_output, dim=0
+            )  # [batch_size, seq_len, hidden_size]
         elif self.aggregation == "concat":
-            concatenated_output = torch.cat(all_hidden_states, dim=-1)
-            cumulative_output = self.reduce_linear(concatenated_output)
+            concatenated_output = torch.cat(
+                all_hidden_states, dim=-1
+            )  # [batch_size, seq_len, hidden_size * num_layers]
+            cumulative_output = self.reduce_linear(
+                concatenated_output
+            )  # [batch_size, seq_len, hidden_size]
         elif self.aggregation == "weighted_sum":
             weighted_outputs = torch.stack(
                 [
@@ -77,21 +123,25 @@ class BERRRTModel(nn.Module):
             )
             cumulative_output = torch.sum(weighted_outputs, dim=0)
         elif self.aggregation == "attention":
-            stacked_outputs = torch.stack(all_hidden_states, dim=0)
-            attention_scores = F.softmax(
-                self.attention_weights(stacked_outputs).squeeze(-1), dim=0
+            concatenated_output = torch.cat(
+                all_hidden_states, dim=-1
+            )  # [batch_size, seq_len, hidden_size * num_layers]
+            reduce_to_hidden_dim = self.reduce_linear(
+                concatenated_output
+            )  # [batch_size, seq_len, hidden_size]
+
+            cumulative_output = self.attention_layer(
+                reduce_to_hidden_dim, reduce_to_hidden_dim, outputs.last_hidden_state
             )
-            expanded_attention = attention_scores.unsqueeze(-1).expand(
-                -1, -1, -1, self.config.hidden_size
-            )
-            # match [num_layers, batch_size, seq_len, hidden_size]
-            cumulative_output = torch.sum(expanded_attention * stacked_outputs, dim=0)
         else:
             raise ValueError(f"Unsupported aggregation strategy: {self.aggregation}")
 
-        pooled_output = cumulative_output[0]
-        pooled_output = self.dropout(cumulative_output)
-        logits = self.classifier(pooled_output)[:, 0, :]
+        pooled_output = self.dropout(
+            cumulative_output
+        )  # [batch_size, seq_len, hidden_size]
+
+        # Take cls token and pass it through the classifier
+        logits = self.classifier(pooled_output[:, 0, :])
 
         loss = None
         if labels is not None:

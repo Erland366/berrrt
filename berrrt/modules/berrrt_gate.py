@@ -19,16 +19,20 @@ class AttentionGate(nn.Module):
     def __init__(self, hidden_dim):
         super().__init__()
         self.hidden_dim = hidden_dim
-        self.query = nn.Linear(hidden_dim, hidden_dim)
-        self.key = nn.Linear(hidden_dim, hidden_dim)
-        self.value = nn.Linear(hidden_dim, hidden_dim)
 
-    def forward(self, hidden_states: SequenceOrTensor) -> SequenceOrTensor:
-        # Multiple hidden_states turned into one
+        # For simplicity, we just use one attention head
+        # Reference too adding attention heads:
+        # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/modeling_llama.py#L289
+        self.q_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.k_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.v_proj = nn.Linear(hidden_dim, hidden_dim)
 
-        Q = self.query(hidden_states)
-        K = self.key(hidden_states)
-        V = self.value(hidden_states)
+    def forward(
+        self, query: SequenceOrTensor, key: SequenceOrTensor, value: SequenceOrTensor
+    ) -> SequenceOrTensor:
+        Q = self.q_proj(query)
+        K = self.k_proj(key)
+        V = self.v_proj(value)
 
         with torch.backends.cuda.sdp_kernel():
             attention_value = F.scaled_dot_product_attention(Q, K, V)
@@ -75,16 +79,13 @@ class BERRRTGateModel(nn.Module):
         self.num_classes = num_classes
         self.gate_type = gate
         self.num_layers = layer_end - layer_start + 1
-        self.gate = Gate(
-            self.bert.config.hidden_size,
-            self.num_layers
-            if gate in ["softmax", "sigmoid"]
-            else self.bert.config.hidden_size,
-        )
         self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
         self.linear_hidden = nn.Linear(self.bert.config.hidden_size, 1)
+        self.attention_gate = (
+            AttentionGate(self.bert.config.hidden_size) if gate == "attention" else None
+        )
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -120,12 +121,16 @@ class BERRRTGateModel(nn.Module):
                 )  # Element-wise multiplication
                 cumulative_output += weighted_output
         elif self.gate_type == "attention":
-            attention_output = self.gate(cls_hidden_states)
             for i in range(cls_hidden_states.shape[1]):
+                attention_output = self.attention_gate(
+                    cls_hidden_states[:, i, ...],  # [b, 768]
+                    cls_hidden_states[:, i, ...],  # [b, 768]
+                    outputs.last_hidden_state[:, 0, :],  # [b, 768],
+                )
                 berrrt_output = self.berrrt_ffn(
-                    attention_output[:, i, ...]
+                    attention_output
                 )  # FFN applied to each attention-weighted layer output
-                cumulative_output += berrrt_output
+                cumulative_output *= berrrt_output
 
         pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
