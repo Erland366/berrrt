@@ -12,4 +12,4 @@ metric_for_best_model: accuracy
 load_best_model_at_end: True
 report_to: "wandb"
 use_cpu: False
-save_total+_limit: 1
+save_total_limit: 1
