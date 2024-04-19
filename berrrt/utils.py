@@ -84,6 +84,26 @@ def compute_metrics(pred: EvalPrediction) -> dict:
         "recall": recall,
     }
 
+def compute_metrics_multi(pred: EvalPrediction) -> dict:
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        labels, preds, average=None
+    )
+    # acc = accuracy_score(labels, preds)
+    # return {
+    #     "accuracy": acc,
+    #     "f1": f1.tolist(),
+    #     "precision": precision.tolist(),
+    #     "recall": recall.tolist(),
+    # }
+    acc = accuracy_score(labels, preds)
+    return {
+        "accuracy": acc,
+        "f1": f1,
+        "precision": precision,
+        "recall": recall,
+    }
 
 def create_run_name(
     model_type,

@@ -2,7 +2,7 @@ bash scripts/print_header.sh
 
 source .env
 
-datasets=("default" "emotion" "hate" "irony" "rte")
+datasets=("emotion" "hate" "irony" "rte")
 
 for dataset in "${datasets[@]}"; do
   python main.py mode=full modules=bert modules_name=bert dataset=$dataset

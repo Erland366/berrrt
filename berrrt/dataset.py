@@ -10,6 +10,7 @@ class BERRRTDataset(object):
             cfg.dataset.pretrained_model_name_or_path
         )
         self.dataset = load_dataset(cfg.dataset.path, cfg.dataset.name)
+        self.columns = cfg.dataset.get("columns", ["text"])
         self.train_encoded = None
         self.eval_encoded = None
         self.test_encoded = None
@@ -41,9 +42,9 @@ class BERRRTDataset(object):
         self.prepare_datasets()
 
     def tokenize_function(self, examples):
+
         return self.tokenizer(
-            examples["sentence1"],
-            examples["sentence2"],
+            *[examples[column] for column in self.columns],
             truncation=self.cfg.dataset.tokenizer.truncation,
             padding=self.cfg.dataset.tokenizer.padding,
             max_length=self.cfg.dataset.tokenizer.max_length,
@@ -54,7 +55,7 @@ class BERRRTDataset(object):
             self.tokenize_function, batched=self.cfg.dataset.batched
         )
         self.train_encoded = self.train_encoded.remove_columns(
-            ["sentence1", "sentence2"]
+            self.columns
         )
 
         if self.eval_dataset is not None:
@@ -62,7 +63,7 @@ class BERRRTDataset(object):
                 self.tokenize_function, batched=self.cfg.dataset.batched
             )
             self.eval_encoded = self.eval_encoded.remove_columns(
-                ["sentence1", "sentence2"]
+                self.columns
             )
             self.set_format(self.eval_encoded)
 
@@ -71,7 +72,7 @@ class BERRRTDataset(object):
                 self.tokenize_function, batched=self.cfg.dataset.batched
             )
             self.test_encoded = self.test_encoded.remove_columns(
-                ["sentence1", "sentence2"]
+                self.columns
             )
             self.set_format(self.test_encoded)
 

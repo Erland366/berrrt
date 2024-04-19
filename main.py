@@ -9,7 +9,13 @@ import wandb
 from berrrt.dataset import BERRRTDataset
 from berrrt.modules.base import ModulesFactory
 from berrrt.torch_utils import get_default_device, set_seed
-from berrrt.utils import compute_metrics, create_run_name, print_headers, setup_wandb
+from berrrt.utils import (
+    compute_metrics,
+    create_run_name,
+    print_headers,
+    setup_wandb,
+    compute_metrics_multi,
+)
 
 
 @hydra.main(version_base=None, config_path="berrrt/conf", config_name="config")
@@ -70,7 +76,9 @@ def main(cfg: DictConfig):
         args=training_args,
         train_dataset=dataset.train_encoded,
         eval_dataset=dataset.eval_encoded,
-        compute_metrics=compute_metrics,
+        compute_metrics=compute_metrics
+        if cfg.dataset.num_classes == 2
+        else compute_metrics_multi,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     )
 
