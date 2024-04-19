@@ -2,74 +2,83 @@ bash scripts/print_header.sh
 
 source .env
 
-python main.py mode=full modules=bert modules_name=bert
+datasets=("default" "emotion" "hate" "irony" "rte")
 
-# python main.py mode=sanity_check modules.layer_start=0 modules.layer_end=11 modules.gate=sigmoid modules=berrrt_gate modules_name=berrrt_gate
+for dataset in "${datasets[@]}"; do
+  python main.py mode=full modules=bert modules_name=bert dataset=$dataset
 
+  # # run training berrrt
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=average dataset=$dataset
 
-# # run training berrrt
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=average
-done
+  done
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=add
-done
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=add dataset=$dataset
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=concat
-done
+  done
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=weighted_sum
-done
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=concat dataset=$dataset
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=attention
-done
+  done
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=attention
-done
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=weighted_sum dataset=$dataset
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=softmax
-done
+  done
 
-for ((layer=0; layer<=10; layer++)); do
-  # Execute the print_header.sh script
-  bash scripts/print_header.sh
-  
-  # Run main.py with the current layer
-  python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=sigmoid
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt modules_name=berrrt modules.aggregation=attention dataset=$dataset
+
+  done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=attention dataset=$dataset
+
+  done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=softmax dataset=$dataset
+
+  done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=sigmoid dataset=$dataset
+
+  done
 done
 
 
