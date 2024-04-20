@@ -1,4 +1,4 @@
-path: "glue"
+path: "tweet_eval"
 name: "irony"
 truncation: True
 pretrained_model_name_or_path: "bert-base-uncased"
