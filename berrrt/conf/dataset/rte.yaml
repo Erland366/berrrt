@@ -3,6 +3,7 @@ name: "rte"
 truncation: True
 pretrained_model_name_or_path: "bert-base-uncased"
 batched: True
+columns: ["sentence1", "sentence2"]
 
 num_classes: 2
 sample_size: ${dataset.num_classes}

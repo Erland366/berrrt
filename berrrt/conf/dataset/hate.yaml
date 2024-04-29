@@ -3,8 +3,9 @@ name: "hate"
 truncation: True
 pretrained_model_name_or_path: "bert-base-uncased"
 batched: True
+columns: ["text"]
 
-num_classes: 6
+num_classes: 2
 sample_size: ${dataset.num_classes}
 
 tokenizer:
