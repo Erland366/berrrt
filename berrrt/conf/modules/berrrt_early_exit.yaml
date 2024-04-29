@@ -1,0 +1,8 @@
+defaults:
+  - default
+  - layer_configuration
+  - _self_
+
+gate: softmax
+
+additional_prefix: ee_${modules.gate}-layer_range_${modules.layer_start}_${modules.layer_end}

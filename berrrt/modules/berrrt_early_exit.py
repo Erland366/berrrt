@@ -1,28 +1,17 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Array, Float  # type : ignore
+from torch import nn
 from transformers import BertConfig, BertModel
 
 from berrrt.aliases import SequenceOrTensor
 
 
-class Gate(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        self.gate_weight = nn.Linear(input_dim, output_dim)
-
-    def forward(self, x):
-        return self.gate_weight(x)
-
-
 class AttentionGate(nn.Module):
-    def __init__(self, hidden_dim):
+    def __init__(self, hidden_dim: int) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
 
-        # For simplicity, we just use one attention head
-        # Reference too adding attention heads:
-        # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/modeling_llama.py#L289
         self.q_proj = nn.Linear(hidden_dim, hidden_dim)
         self.k_proj = nn.Linear(hidden_dim, hidden_dim)
         self.v_proj = nn.Linear(hidden_dim, hidden_dim)
@@ -40,52 +29,39 @@ class AttentionGate(nn.Module):
         return attention_value
 
 
-class BERRRTFFN(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.linear1 = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.act = nn.ReLU()
-        self.linear2 = nn.Linear(config.intermediate_size, config.hidden_size)
-
-    def forward(self, x):
-        return self.linear2(self.act(self.linear1(x)))
-
-
-class BERRRTGateModel(nn.Module):
+class BERRRTEarlyExit(nn.Module):
     def __init__(
         self,
-        pretrained_model_name_or_path,
-        layer_start,
-        layer_end,
-        freeze_base,
-        num_classes,
+        pretrained_model_name_or_path: str,
+        layer_start: int,
+        layer_end: int,
+        freeze_base: bool,
+        num_classes: int,
         dropout: float = 0.1,
         gate: str = "softmax",
-    ):
+    ) -> None:
         super().__init__()
         self.config = BertConfig.from_pretrained(
-            pretrained_model_name_or_path, output_hidden_states=True
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
+            output_hidden_states=True,
         )
         self.bert = BertModel.from_pretrained(
-            pretrained_model_name_or_path, config=self.config
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
+            config=self.config,
         )
 
         if freeze_base:
             for param in self.bert.parameters():
                 param.requires_grad = False
-
         self.layer_start = layer_start
         self.layer_end = layer_end
         self.num_classes = num_classes
-        self.gate_type = gate
-        self.num_layers = layer_end - layer_start + 1
-        self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
-        self.linear_hidden = nn.Linear(self.bert.config.hidden_size, 1)
-        self.attention_gate = (
-            AttentionGate(self.bert.config.hidden_size) if gate == "attention" else None
+        self.classifier = nn.Linear(self.config.hidden_size, num_classes)
+        self.attention_gate = nn.MultiheadAttention(
+            embed_dim=self.bert.config.hidden_size, num_heads=12
         )
+        self.gate_type = gate
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -99,6 +75,8 @@ class BERRRTGateModel(nn.Module):
         stacked_hidden_states = torch.stack(all_hidden_states, dim=-1)
         cls_hidden_states = stacked_hidden_states[:, 0, :, :]  # [b, 768, n_layers]
         cls_hidden_states = cls_hidden_states.permute(0, 2, 1)  # [b, n_layers, 768]
+
+        loss = 0
 
         if self.gate_type in ["softmax", "sigmoid"]:
             linear_hidden_states = self.linear_hidden(cls_hidden_states)
@@ -121,6 +99,11 @@ class BERRRTGateModel(nn.Module):
                     layer_gate_values * berrrt_output
                 )  # Element-wise multiplication
                 cumulative_output += weighted_output
+                pooled_output = self.dropout(cls_hidden_states[:, i, ...])
+                logits = self.classifier(pooled_output)
+                if labels is not None:
+                    loss_fct = nn.CrossEntropyLoss()
+                    loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
         elif self.gate_type == "attention":
             for i in range(cls_hidden_states.shape[1]):
                 attention_output = self.attention_gate(
@@ -133,14 +116,20 @@ class BERRRTGateModel(nn.Module):
                 )  # FFN applied to each attention-weighted layer output
                 cumulative_output *= berrrt_output
 
+                # Now calculate classifier per output
+                pooled_output = self.dropout(cls_hidden_states[:, i, ...])
+                logits = self.classifier(pooled_output)
+                if labels is not None:
+                    loss_fct = nn.CrossEntropyLoss()
+                    loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
+
         pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
         logits = self.classifier(pooled_output)  # [b, num_classes]
 
-        loss = None
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
+            loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
 
         return (
             {"loss": loss, "logits": logits} if loss is not None else {"logits": logits}
