@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from jaxtyping import Array, Float  # type : ignore
+from jaxtyping import Float  # type : ignore
 from torch import nn
 from transformers import BertConfig, BertModel
 
@@ -28,8 +28,19 @@ class AttentionGate(nn.Module):
 
         return attention_value
 
+class BERRRTFFN(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.linear1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.act = nn.ReLU()
+        self.linear2 = nn.Linear(config.intermediate_size, config.hidden_size)
 
-class BERRRTEarlyExit(nn.Module):
+    def forward(self, x):
+        return self.linear2(self.act(self.linear1(x)))
+
+
+
+class BERRRTEarlyExitModel(nn.Module):
     def __init__(
         self,
         pretrained_model_name_or_path: str,
@@ -56,12 +67,15 @@ class BERRRTEarlyExit(nn.Module):
         self.layer_start = layer_start
         self.layer_end = layer_end
         self.num_classes = num_classes
+        self.gate_type = gate
+        self.num_layers = layer_end - layer_start + 1
+        self.berrrt_ffn = BERRRTFFN(self.bert.config)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(self.config.hidden_size, num_classes)
+        self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
+        self.linear_hidden = nn.Linear(self.bert.config.hidden_size, 1)
         self.attention_gate = nn.MultiheadAttention(
             embed_dim=self.bert.config.hidden_size, num_heads=12
         )
-        self.gate_type = gate
 
     def forward(self, input_ids, attention_mask, labels=None):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
@@ -106,7 +120,7 @@ class BERRRTEarlyExit(nn.Module):
                     loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
         elif self.gate_type == "attention":
             for i in range(cls_hidden_states.shape[1]):
-                attention_output = self.attention_gate(
+                attention_output, attention_weights = self.attention_gate(
                     cls_hidden_states[:, i, ...],  # [b, 768]
                     cls_hidden_states[:, i, ...],  # [b, 768]
                     outputs.last_hidden_state[:, 0, :],  # [b, 768],

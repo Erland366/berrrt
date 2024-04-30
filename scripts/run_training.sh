@@ -79,6 +79,33 @@ for dataset in "${datasets[@]}"; do
     python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_gate modules_name=berrrt_gate modules.gate=sigmoid dataset=$dataset
 
   done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_early_exit modules_name=berrrt_early_exit modules.gate=attention dataset=$dataset
+
+  done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_early_exit modules_name=berrrt_early_exit modules.gate=softmax dataset=$dataset
+
+  done
+
+  for ((layer=0; layer<=10; layer++)); do
+    # Execute the print_header.sh script
+    bash scripts/print_header.sh
+    
+    # Run main.py with the current layer
+    python main.py mode=full modules.layer_start=$layer modules.layer_end=11 modules=berrrt_early_exit modules_name=berrrt_early_exit modules.gate=sigmoid dataset=$dataset
+
+  done
 done
 
 

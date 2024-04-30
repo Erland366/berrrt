@@ -1,6 +1,7 @@
 from berrrt.modules.berrrt import BERRRTModel
 from berrrt.modules.berrrt_gate import BERRRTGateModel
 from berrrt.modules.bert import BERTModel
+from berrrt.modules.berrrt_early_exit import BERRRTEarlyExitModel
 
 
 class ModulesFactory:
@@ -8,6 +9,7 @@ class ModulesFactory:
         "berrrt": BERRRTModel,
         "bert": BERTModel,
         "berrrt_gate": BERRRTGateModel,
+        "berrrt_early_exit" : BERRRTEarlyExitModel,
     }
 
     def __init__(
