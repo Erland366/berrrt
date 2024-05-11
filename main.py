@@ -40,6 +40,7 @@ def run(cfg: DictConfig):
         return
     elif cfg.mode == "sanity_check":
         cfg.train.num_train_epochs = 1
+        cfg.train.report_to = None
     set_seed(cfg.utils.random_seed)
 
     if cfg.logging.name is None:

@@ -3,8 +3,6 @@ import torch.nn.functional as F
 from jaxtyping import Float  # type : ignore
 from torch import nn
 from transformers import BertConfig, BertModel
-from berrrt.utils import list_to_indexed_dict
-import wandb
 
 from berrrt.aliases import SequenceOrTensor
 
@@ -79,27 +77,40 @@ class BERRRTEarlyExitModel(nn.Module):
             embed_dim=self.bert.config.hidden_size, num_heads=12
         )
 
-    def forward(self, input_ids, attention_mask, labels=None):
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        labels: None | SequenceOrTensor = None,
+        return_early_exit: bool = True,
+    ):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
         all_hidden_states = outputs.hidden_states[self.layer_start : self.layer_end + 1]
         batch_size, _, hidden_dim = outputs.last_hidden_state.shape
 
-        cumulative_output = torch.zeros(
+        cumulative_output: Float[torch.Tensor, "batch_size hidden_dim"] = torch.zeros(
             batch_size, hidden_dim, device=outputs.last_hidden_state.device
         )
 
-        stacked_hidden_states = torch.stack(all_hidden_states, dim=-1)
-        cls_hidden_states = stacked_hidden_states[:, 0, :, :]  # [b, 768, n_layers]
-        cls_hidden_states = cls_hidden_states.permute(0, 2, 1)  # [b, n_layers, 768]
+        stacked_hidden_states: Float[
+            torch.Tensor, "batch_size n_vocab hidden_dim n_layers"
+        ] = torch.stack(all_hidden_states, dim=-1)
+        cls_hidden_states: Float[torch.Tensor, "batch_size hidden_dim n_layers"] = (
+            stacked_hidden_states[:, 0, :, :]
+        )
+        cls_hidden_states: Float[torch.Tensor, "batch_size n_layers hidden_dim"] = (
+            cls_hidden_states.permute(0, 2, 1)
+        )
 
         loss = 0
+        early_exit_logits = []
 
         if self.gate_type in ["softmax", "sigmoid"]:
-            linear_hidden_states = self.linear_hidden(cls_hidden_states)
-
-            # Bisa klasifikasi layer disini
+            linear_hidden_states: Float[torch.Tensor, "batch_size n_layers 1"] = (
+                self.linear_hidden(cls_hidden_states)
+            )
             if self.gate_type == "softmax":
-                gate_values = F.softmax(
+                gate_values: Float[torch.Tensor, "barch_size n_layers 1"] = F.softmax(
                     linear_hidden_states, dim=1
                 )  # Apply softmax across the first dimension (layers)
             else:  # Sigmoid
@@ -117,12 +128,8 @@ class BERRRTEarlyExitModel(nn.Module):
                 cumulative_output += weighted_output
                 pooled_output = self.dropout(cls_hidden_states[:, i, ...])
                 logits = self.classifier(pooled_output)
-                wandb.log(
-                    list_to_indexed_dict(
-                        F.softmax(logits, dim=-1)[0].tolist(),
-                        f"layer_{i}_logits_softmax",
-                    )
-                )
+                if return_early_exit:
+                    early_exit_logits.append(logits)
                 if labels is not None:
                     loss_fct = nn.CrossEntropyLoss()
                     loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
@@ -141,12 +148,8 @@ class BERRRTEarlyExitModel(nn.Module):
                 # Now calculate classifier per output
                 pooled_output = self.dropout(cls_hidden_states[:, i, ...])
                 logits = self.classifier(pooled_output)
-                wandb.log(
-                    list_to_indexed_dict(
-                        F.softmax(logits, dim=-1)[0].tolist(),
-                        f"layer_{i}_logits_softmax",
-                    )
-                )
+                if return_early_exit:
+                    early_exit_logits.append(logits)
                 if labels is not None:
                     loss_fct = nn.CrossEntropyLoss()
                     loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
@@ -154,16 +157,15 @@ class BERRRTEarlyExitModel(nn.Module):
         pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
         logits = self.classifier(pooled_output)  # [b, num_classes]
-        wandb.log(
-            list_to_indexed_dict(
-                F.softmax(logits, dim=-1)[0].tolist(), "final_logits_softmax_class"
-            )
-        )
 
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss()
             loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
 
-        return (
-            {"loss": loss, "logits": logits} if loss is not None else {"logits": logits}
-        )
+        # From 3.7, dictionary will always be in sort so don't worry!
+        return_dict = {"logits": logits}
+        if loss is not None:
+            return_dict["loss"] = loss
+        if return_early_exit:
+            return_dict["early_exit_logits"] = early_exit_logits
+        return return_dict

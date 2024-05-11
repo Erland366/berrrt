@@ -5,10 +5,18 @@ from pprint import pprint
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers.trainer_utils import EvalPrediction
+from transformers import TrainerCallback, TrainerState
+from transformers.integrations import WandbCallback
+
 
 import wandb
 
 log = logging.getLogger(__name__)
+
+
+class AccuracyLogitsCallback(TrainerCallback):
+    def on_train_end(self, args, state, control, kwargs):
+        pass
 
 
 def setup_wandb(cfg):
@@ -79,46 +87,90 @@ def print_headers(cfg):
 
 def compute_metrics(pred: EvalPrediction) -> dict:
     labels = pred.label_ids
-    preds = pred.predictions.argmax(-1)
+    if isinstance(pred.predictions, tuple):
+        logits = pred.predictions[0]
+    else:
+        logits = pred.predictions
+    final_logits = logits
+    preds = logits.argmax(-1)
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average="binary"
     )
-    # acc = accuracy_score(labels, preds)
-    # return {
-    #     "accuracy": acc,
-    #     "f1": f1.tolist(),
-    #     "precision": precision.tolist(),
-    #     "recall": recall.tolist(),
-    # }
     acc = accuracy_score(labels, preds)
-    return {
-        "accuracy": acc,
-        "f1": f1,
-        "precision": precision,
-        "recall": recall,
-    }
+    if isinstance(pred.predictions, tuple):
+        all_logits = pred.predictions[1]  # type: ignore
+        all_accs = [accuracy_score(labels, preds.argmax(-1)) for preds in all_logits]
+        return {
+            "accuracy": acc,
+            "f1": f1.tolist() if isinstance(f1, torch.Tensor) else f1,
+            "precision": precision.tolist()
+            if isinstance(precision, torch.Tensor)
+            else precision,
+            "recall": recall.tolist() if isinstance(recall, torch.Tensor) else recall,
+            "all_logits": all_logits.tolist()
+            if isinstance(all_logits, torch.Tensor)
+            else all_logits,
+            "all_accs": all_accs,
+            "final_logits": final_logits.tolist()
+            if isinstance(final_logits, torch.Tensor)
+            else final_logits,
+        }
+    else:
+        return {
+            "accuracy": acc,
+            "f1": f1.tolist() if isinstance(f1, torch.Tensor) else f1,
+            "precision": precision.tolist()
+            if isinstance(precision, torch.Tensor)
+            else precision,
+            "recall": recall.tolist() if isinstance(recall, torch.Tensor) else recall,
+            "final_logits": final_logits.tolist()
+            if isinstance(final_logits, torch.Tensor)
+            else final_logits,
+        }
 
 
 def compute_metrics_multi(pred: EvalPrediction) -> dict:
     labels = pred.label_ids
-    preds = pred.predictions.argmax(-1)
+    if isinstance(pred.predictions, tuple):
+        logits = pred.predictions[0]
+    else:
+        logits = pred.predictions
+    final_logits = logits
+    preds = logits.argmax(-1)
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average=None
     )
-    # acc = accuracy_score(labels, preds)
-    # return {
-    #     "accuracy": acc,
-    #     "f1": f1.tolist(),
-    #     "precision": precision.tolist(),
-    #     "recall": recall.tolist(),
-    # }
     acc = accuracy_score(labels, preds)
-    return {
-        "accuracy": acc,
-        "f1": f1,
-        "precision": precision,
-        "recall": recall,
-    }
+    if isinstance(pred.predictions, tuple):
+        all_logits = pred.predictions[1]  # type: ignore
+        all_accs = [accuracy_score(labels, preds.argmax(-1)) for preds in all_logits]
+        return {
+            "accuracy": acc,
+            "f1": f1.tolist() if isinstance(f1, torch.Tensor) else f1,
+            "precision": precision.tolist()
+            if isinstance(precision, torch.Tensor)
+            else precision,
+            "recall": recall.tolist() if isinstance(recall, torch.Tensor) else recall,
+            "all_logits": all_logits.tolist()
+            if isinstance(all_logits, torch.Tensor)
+            else all_logits,
+            "all_accs": all_accs,
+            "final_logits": final_logits.tolist()
+            if isinstance(final_logits, torch.Tensor)
+            else final_logits,
+        }
+    else:
+        return {
+            "accuracy": acc,
+            "f1": f1.tolist() if isinstance(f1, torch.Tensor) else f1,
+            "precision": precision.tolist()
+            if isinstance(precision, torch.Tensor)
+            else precision,
+            "recall": recall.tolist() if isinstance(recall, torch.Tensor) else recall,
+            "final_logits": final_logits.tolist()
+            if isinstance(final_logits, torch.Tensor)
+            else final_logits,
+        }
 
 
 def create_run_name(
