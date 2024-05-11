@@ -21,6 +21,20 @@ def setup_wandb(cfg):
     return run
 
 
+def list_to_indexed_dict(lst, prefix):
+    """
+    Convert a list to a dictionary with keys as a combination of a prefix and the index.
+
+    Parameters:
+    lst (list): The list of values to be converted into a dictionary.
+    prefix (str): The prefix to be used for the keys.
+
+    Returns:
+    dict: A dictionary with keys formed by the prefix and index, and values from the list.
+    """
+    return {f"{prefix}-{i}": value for i, value in enumerate(lst)}
+
+
 # Copied from https://github.com/unslothai/unsloth/blob/b4fe3cd67d171d899e3a90b0d9157940b6aaba3c/unsloth/models/llama.py#L917
 def print_headers(cfg):
     HAS_FLASH_ATTENTION = False
@@ -84,6 +98,7 @@ def compute_metrics(pred: EvalPrediction) -> dict:
         "recall": recall,
     }
 
+
 def compute_metrics_multi(pred: EvalPrediction) -> dict:
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
@@ -104,6 +119,7 @@ def compute_metrics_multi(pred: EvalPrediction) -> dict:
         "precision": precision,
         "recall": recall,
     }
+
 
 def create_run_name(
     model_type,

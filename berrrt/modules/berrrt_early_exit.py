@@ -3,6 +3,8 @@ import torch.nn.functional as F
 from jaxtyping import Float  # type : ignore
 from torch import nn
 from transformers import BertConfig, BertModel
+from berrrt.utils import list_to_indexed_dict
+import wandb
 
 from berrrt.aliases import SequenceOrTensor
 
@@ -28,6 +30,7 @@ class AttentionGate(nn.Module):
 
         return attention_value
 
+
 class BERRRTFFN(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -37,7 +40,6 @@ class BERRRTFFN(nn.Module):
 
     def forward(self, x):
         return self.linear2(self.act(self.linear1(x)))
-
 
 
 class BERRRTEarlyExitModel(nn.Module):
@@ -115,6 +117,12 @@ class BERRRTEarlyExitModel(nn.Module):
                 cumulative_output += weighted_output
                 pooled_output = self.dropout(cls_hidden_states[:, i, ...])
                 logits = self.classifier(pooled_output)
+                wandb.log(
+                    list_to_indexed_dict(
+                        F.softmax(logits, dim=-1)[0].tolist(),
+                        f"layer_{i}_logits_softmax",
+                    )
+                )
                 if labels is not None:
                     loss_fct = nn.CrossEntropyLoss()
                     loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
@@ -133,6 +141,12 @@ class BERRRTEarlyExitModel(nn.Module):
                 # Now calculate classifier per output
                 pooled_output = self.dropout(cls_hidden_states[:, i, ...])
                 logits = self.classifier(pooled_output)
+                wandb.log(
+                    list_to_indexed_dict(
+                        F.softmax(logits, dim=-1)[0].tolist(),
+                        f"layer_{i}_logits_softmax",
+                    )
+                )
                 if labels is not None:
                     loss_fct = nn.CrossEntropyLoss()
                     loss += loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
@@ -140,6 +154,11 @@ class BERRRTEarlyExitModel(nn.Module):
         pooled_output = cumulative_output
         pooled_output = self.dropout(cumulative_output)
         logits = self.classifier(pooled_output)  # [b, num_classes]
+        wandb.log(
+            list_to_indexed_dict(
+                F.softmax(logits, dim=-1)[0].tolist(), "final_logits_softmax_class"
+            )
+        )
 
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss()
