@@ -62,7 +62,7 @@ def main(cfg: DictConfig):
     model = ModulesFactory(cfg.modules_name).create_model(**cfg.modules)
 
     device = get_default_device()
-    model.to(device)
+    model = model.to(device)
 
     training_args = TrainingArguments(
         output_dir=f"./{cfg.run_name.run_name}",

@@ -5,7 +5,7 @@ source .env
 datasets=("default" "emotion" "hate" "irony" "rte")
 
 for dataset in "${datasets[@]}"; do
-#   python main.py mode=full modules=bert modules_name=bert dataset=$dataset
+  python main.py mode=full modules=bert modules_name=bert dataset=$dataset
 
   # for ((layer=0; layer<=10; layer++)); do
   #   # Execute the print_header.sh script
