@@ -94,9 +94,8 @@ def compute_metrics(pred: EvalPrediction) -> dict:
     else:
         logits = pred.predictions
 
-    # Convert logits and labels if they are tensors
     if isinstance(logits, torch.Tensor):
-        logits = logits.cpu().numpy()  # Convert to NumPy array if it's a Tensor
+        logits = logits.cpu().numpy()
     if isinstance(labels, torch.Tensor):
         labels = labels.cpu().numpy()
     
@@ -108,7 +107,6 @@ def compute_metrics(pred: EvalPrediction) -> dict:
     )
     acc = accuracy_score(labels, preds)
 
-    # Convert metrics to lists if they are numpy arrays or tensors
     f1 = f1.tolist() if isinstance(f1, np.ndarray) else f1
     precision = precision.tolist() if isinstance(precision, np.ndarray) else precision
     recall = recall.tolist() if isinstance(recall, np.ndarray) else recall
@@ -121,25 +119,22 @@ def compute_metrics(pred: EvalPrediction) -> dict:
     }
 
     if isinstance(pred.predictions, tuple):
-        # Log the last sample from final_logits
         last_final_logits = final_logits[-1]
         last_final_logits = last_final_logits.tolist() if hasattr(last_final_logits, 'tolist') else last_final_logits
         results["final_logits_last_sample"] = last_final_logits
+        results["final_labels"] = pred.label_ids[-1]
 
-        all_logits = pred.predictions[1]  # List of [batch_size, num_classes]
+        all_logits = pred.predictions[1]  
         all_accs = [accuracy_score(labels, p.argmax(-1)) for p in all_logits]
 
-        # Determine number of classes from the first element of all_logits if available
         num_classes = all_logits[0].shape[1] if all_logits else 0
         
-        # Prepare to log all_logits using wandb.Table
         logits_table = wandb.Table(columns=[f"Class {j+1}" for j in range(num_classes)])
 
         for layer_index, layer_logits in enumerate(all_logits):
-            # Get the last sample for this layer
             last_sample = layer_logits[-1]
             last_sample = last_sample.tolist() if hasattr(last_sample, 'tolist') else last_sample
-            logits_table.add_data(*last_sample)  # Add this as a new row in the table
+            logits_table.add_data(*last_sample)  
 
         results.update({
             "all_accs": all_accs,
@@ -155,9 +150,8 @@ def compute_metrics_multi(pred: EvalPrediction) -> dict:
     else:
         logits = pred.predictions
 
-    # Convert logits and labels if they are tensors
     if isinstance(logits, torch.Tensor):
-        logits = logits.cpu().numpy()  # Convert to NumPy array if it's a Tensor
+        logits = logits.cpu().numpy() 
     if isinstance(labels, torch.Tensor):
         labels = labels.cpu().numpy()
     
@@ -169,7 +163,6 @@ def compute_metrics_multi(pred: EvalPrediction) -> dict:
     )
     acc = accuracy_score(labels, preds)
 
-    # Convert metrics to lists if they are numpy arrays or tensors
     f1 = f1.tolist() if isinstance(f1, np.ndarray) else f1
     precision = precision.tolist() if isinstance(precision, np.ndarray) else precision
     recall = recall.tolist() if isinstance(recall, np.ndarray) else recall
@@ -182,25 +175,22 @@ def compute_metrics_multi(pred: EvalPrediction) -> dict:
     }
 
     if isinstance(pred.predictions, tuple):
-        # Log the last sample from final_logits
         last_final_logits = final_logits[-1]
         last_final_logits = last_final_logits.tolist() if hasattr(last_final_logits, 'tolist') else last_final_logits
         results["final_logits_last_sample"] = last_final_logits
+        results["final_labels"] = pred.label_ids[-1]
 
-        all_logits = pred.predictions[1]  # List of [batch_size, num_classes]
+        all_logits = pred.predictions[1]
         all_accs = [accuracy_score(labels, p.argmax(-1)) for p in all_logits]
 
-        # Determine number of classes from the first element of all_logits if available
         num_classes = all_logits[0].shape[1] if all_logits else 0
         
-        # Prepare to log all_logits using wandb.Table
         logits_table = wandb.Table(columns=[f"Class {j+1}" for j in range(num_classes)])
 
         for layer_index, layer_logits in enumerate(all_logits):
-            # Get the last sample for this layer
             last_sample = layer_logits[-1]
             last_sample = last_sample.tolist() if hasattr(last_sample, 'tolist') else last_sample
-            logits_table.add_data(*last_sample)  # Add this as a new row in the table
+            logits_table.add_data(*last_sample) 
 
         results.update({
             "all_accs": all_accs,
